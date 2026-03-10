@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+requests
+python-dotenv
+numpy
+pandas
+scikit-learn
+joblib
+torch
+firebase-admin
+pydantic
