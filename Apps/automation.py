@@ -33,7 +33,7 @@ class RelayController:
         current_hour = datetime.now().hour
         return current_hour in self.low_energy_hours
 
-    def control(self, room: str, motion: int, timeout_seconds: int = 300) -> bool:
+    def control(self, room: str, motion: int, timeout_seconds: int = 60) -> bool:
         """
         room: "bedroom" or "living_room"
         motion: 0 or 1
@@ -63,5 +63,6 @@ class RelayController:
         update_relay_state(relay_key, self.relay_states[relay_key])
 
         return self.relay_states[relay_key]
+
 
 relay_controller = RelayController()
