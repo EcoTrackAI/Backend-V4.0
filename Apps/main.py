@@ -1,9 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
-import os
-import asyncpg
 from dotenv import load_dotenv
+import firebase_admin
+from firebase_admin import credentials, db
 
 from Apps.automation import relay_controller
 from Apps.forecasting import forecast_engine
@@ -14,17 +14,24 @@ from Apps.firebase_service import update_relay_state
 
 load_dotenv()
 
-POSTGRES_URL = os.getenv("DATABASE_URL")
 
-if not POSTGRES_URL:
-    raise ValueError("DATABASE_URL not found in environment variables")
+# -----------------------------------
+# FIREBASE INITIALIZATION
+# -----------------------------------
 
-db_pool = None
+try:
+    if not firebase_admin._apps:
+        cred = credentials.Certificate("serviceAccountKey.json")
+        firebase_admin.initialize_app(cred, {
+            "databaseURL": "https://ecotrackai-7a140-default-rtdb.asia-southeast1.firebasedatabase.app/"
+        })
+except Exception as e:
+    print("Firebase initialization error:", e)
 
 
 app = FastAPI(
     title="EcoTrackAI Backend",
-    version="2.0"
+    version="4.0"
 )
 
 
@@ -46,32 +53,6 @@ app.add_middleware(
 
 
 # -----------------------------------
-# DATABASE CONNECTION
-# -----------------------------------
-
-@app.on_event("startup")
-async def startup():
-    global db_pool
-    try:
-        db_pool = await asyncpg.create_pool(
-            POSTGRES_URL,
-            min_size=2,
-            max_size=10
-        )
-        print("PostgreSQL connected")
-    except Exception as e:
-        print("Database connection failed:", e)
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    global db_pool
-    if db_pool:
-        await db_pool.close()
-        print("PostgreSQL closed")
-
-
-# -----------------------------------
 # HEALTH CHECK
 # -----------------------------------
 
@@ -84,36 +65,27 @@ def root():
 
 
 # -----------------------------------
-# GET LATEST SENSOR DATA
+# GET LATEST SENSOR DATA (FIREBASE)
 # -----------------------------------
 
 async def get_latest_sensor(room: str):
 
-    if not db_pool:
-        raise HTTPException(500, "Database not initialized")
+    try:
+        ref = db.reference(f"/sensors/{room}")
+        data = ref.get()
 
-    async with db_pool.acquire() as conn:
-
-        row = await conn.fetchrow(
-            """
-            SELECT temperature, humidity, light, motion
-            FROM room_sensors
-            WHERE room_id = $1
-            ORDER BY timestamp DESC
-            LIMIT 1
-            """,
-            room
-        )
-
-        if not row:
+        if not data:
             raise HTTPException(404, "No sensor data found")
 
         return {
-            "temp": row["temperature"],
-            "humidity": row["humidity"],
-            "light": row["light"],
-            "motion": row["motion"]
+            "temp": data.get("temperature", 0),
+            "humidity": data.get("humidity", 0),
+            "light": data.get("light", 0),
+            "motion": int(bool(data.get("motion", 0)))
         }
+
+    except Exception as e:
+        raise HTTPException(500, f"Firebase error: {str(e)}")
 
 
 # -----------------------------------
@@ -143,10 +115,10 @@ async def live_sensor(room: str):
 async def relay_control(room: str, motion: int):
 
     if motion not in [0, 1]:
-        raise HTTPException(status_code=400, detail="Motion must be 0 or 1")
+        raise HTTPException(400, "Motion must be 0 or 1")
 
     if room not in ["bedroom", "living_room"]:
-        raise HTTPException(status_code=400, detail="Invalid room name")
+        raise HTTPException(400, "Invalid room name")
 
     try:
         state = relay_controller.control(room, motion)
@@ -159,7 +131,7 @@ async def relay_control(room: str, motion: int):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(500, str(e))
 
 
 # -----------------------------------
@@ -170,11 +142,11 @@ async def relay_control(room: str, motion: int):
 async def recommend(room: str):
 
     if room not in ["bedroom", "living_room"]:
-        raise HTTPException(status_code=400, detail="Invalid room name")
+        raise HTTPException(400, "Invalid room name")
 
     try:
 
-        # Fetch latest sensor data
+        # Fetch latest sensor data from Firebase
         sensor = await get_latest_sensor(room)
 
         temp = sensor["temp"]
@@ -196,9 +168,7 @@ async def recommend(room: str):
         predicted = forecast_engine.forecast_next()
 
         if predicted is None:
-            return {
-                "message": "Collecting sequence data for prediction."
-            }
+            return {"message": "Collecting sequence data for prediction."}
 
         predicted_temp = float(predicted[0])
         predicted_humidity = float(predicted[1])
@@ -247,7 +217,7 @@ async def recommend(room: str):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(500, str(e))
 
 
 # -----------------------------------
@@ -258,7 +228,7 @@ async def recommend(room: str):
 async def force_relay(room: str, state: bool):
 
     if room not in ["bedroom", "living_room"]:
-        raise HTTPException(status_code=400, detail="Invalid room name")
+        raise HTTPException(400, "Invalid room name")
 
     try:
 
@@ -276,4 +246,4 @@ async def force_relay(room: str, state: bool):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(500, str(e))
