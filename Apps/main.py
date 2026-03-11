@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import os
 import asyncpg
@@ -24,6 +25,23 @@ db_pool = None
 app = FastAPI(
     title="EcoTrackAI Backend",
     version="2.0"
+)
+
+
+# -----------------------------------
+# CORS CONFIGURATION
+# -----------------------------------
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://ecotrackai-dashboard.vercel.app",
+        "https://ecotrackai-preview.vercel.app",
+        "http://localhost:3000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -156,10 +174,7 @@ async def recommend(room: str):
 
     try:
 
-        # -------------------------
-        # FETCH REALTIME SENSOR DATA
-        # -------------------------
-
+        # Fetch latest sensor data
         sensor = await get_latest_sensor(room)
 
         temp = sensor["temp"]
@@ -169,10 +184,7 @@ async def recommend(room: str):
 
         room_encoded = 0 if room == "bedroom" else 1
 
-        # -------------------------
-        # UPDATE LSTM BUFFER
-        # -------------------------
-
+        # Update LSTM buffer
         forecast_engine.update_buffer([
             temp,
             humidity,
@@ -191,10 +203,7 @@ async def recommend(room: str):
         predicted_temp = float(predicted[0])
         predicted_humidity = float(predicted[1])
 
-        # -------------------------
-        # WEATHER DATA
-        # -------------------------
-
+        # Get outdoor weather
         outdoor = get_outdoor_weather()
 
         outdoor_temp = outdoor.get("outdoor_temp")
@@ -209,10 +218,7 @@ async def recommend(room: str):
         if outdoor_humidity is not None:
             humidity_difference = predicted_humidity - outdoor_humidity
 
-        # -------------------------
-        # CONTEXT FOR LLM
-        # -------------------------
-
+        # Context for LLM
         context = {
             "timestamp": datetime.now().isoformat(),
             "room": room,
@@ -231,10 +237,6 @@ async def recommend(room: str):
             "light": light,
             "hour": datetime.now().hour
         }
-
-        # -------------------------
-        # LLM RECOMMENDATION
-        # -------------------------
 
         recommendation = ask_llm(context)
 
