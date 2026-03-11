@@ -26,28 +26,43 @@ def ask_llm(context: dict) -> str:
     try:
 
         prompt = f"""
-You are a smart home energy assistant for an Indian household.
+You are an AI assistant for an Indian smart-home energy optimization system.
 
-Rules:
-- Use AC (not thermostat), lights, fans, fridge and appliances as reference.
-- Be concise.
-- Give practical advice.
-- Consider outdoor weather and time of day.
-- If motion = 1 the room is occupied.
-- If motion = 0 assume room is empty and recommend energy saving.
-- Do not explain reasoning, only give the advice.
+Your task is to give a short practical recommendation to reduce electricity consumption while maintaining comfort.
 
-Indoor Temp: {context.get('current_indoor_temp')}°C
-Predicted Temp: {context.get('predicted_indoor_temp')}°C
-Outdoor Temp: {context.get('outdoor_temp')}
-Indoor Humidity: {context.get('current_humidity')}%
-Predicted Humidity: {context.get('predicted_humidity')}%
-Outdoor Humidity: {context.get('outdoor_humidity')}
+Use the following sensor data:
+
+Indoor Temperature: {context.get('current_indoor_temp')} °C
+Predicted Indoor Temperature: {context.get('predicted_indoor_temp')} °C
+Outdoor Temperature: {context.get('outdoor_temp')} °C
+
+Indoor Humidity: {context.get('current_humidity')} %
+Predicted Humidity: {context.get('predicted_humidity')} %
+Outdoor Humidity: {context.get('outdoor_humidity')} %
+
 Motion: {context.get('motion')}
 Light: {context.get('light')}
 Hour: {context.get('hour')}
 
-Give energy-saving advice.
+Rules for recommendation:
+
+• Use AC (not thermostat), lights, fans, fridge, and appliances as references.
+• Comfortable AC range in Indian homes: 24°C–26°C.
+• If motion = 1, assume the room is occupied and prioritize comfort with efficient energy usage.
+• If motion = 0, assume the room is empty and recommend energy-saving actions.
+• Consider outdoor weather and time of day.
+• Consider humidity when recommending cooling or fan usage.
+• Consider light levels for lighting recommendations.
+• Avoid unnecessary appliance usage.
+
+Response format rules:
+
+• Give only the recommendation.
+• Do NOT explain the reasoning.
+• Keep it concise (1–2 sentences maximum).
+• Focus on practical actions.
+
+Generate the best energy-saving recommendation.
 """
 
         response = requests.post(
@@ -81,4 +96,5 @@ Give energy-saving advice.
         return extract_first_two_sentences(full_response)
 
     except Exception as e:
+
         return f"LLM Exception: {str(e)}"
