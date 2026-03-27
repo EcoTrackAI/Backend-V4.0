@@ -14,18 +14,17 @@ FastAPI backend for smart-home energy optimization using Firebase, LSTM forecast
 
 ```
 Backend-V4.0/
-  app/                    # Conventional ASGI entrypoint alias (deployment-friendly)
-    __init__.py
-    main.py
-  Apps/                   # Existing application modules
+  app/
     __init__.py
     main.py               # Primary FastAPI implementation
-    automation.py
-    firebase_service.py
-    forecasting.py
-    llm.py
-    model_definition.py
-    weather.py
+    services/
+      __init__.py
+      automation.py
+      firebase_service.py
+      forecasting.py
+      llm.py
+      model_definition.py
+      weather.py
   models/
     iot_lstm_model.pt
     scaler.pkl
