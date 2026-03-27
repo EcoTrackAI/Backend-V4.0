@@ -1,5 +1,8 @@
 # Apps/forecasting.py
 
+import os
+from pathlib import Path
+
 import torch
 import numpy as np
 import joblib
@@ -8,8 +11,9 @@ from Apps.model_definition import load_model
 
 
 DEVICE = torch.device("cpu")
-MODEL_PATH = "models/iot_lstm_model.pt"
-SCALER_PATH = "models/scaler.pkl"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+MODEL_PATH = PROJECT_ROOT / "models" / "iot_lstm_model.pt"
+SCALER_PATH = PROJECT_ROOT / "models" / "scaler.pkl"
 
 SEQ_LEN = 60
 
@@ -19,12 +23,12 @@ class ForecastEngine:
     Handles LSTM forecasting with rolling buffer.
     """
 
-    def __init__(self, preload_buffer: bool = True):
+    def __init__(self, preload_buffer: bool = False):
         self.model = load_model(MODEL_PATH, DEVICE)
         self.scaler = joblib.load(SCALER_PATH)
         self.buffer = deque(maxlen=SEQ_LEN)
 
-        # 🔥 Preload buffer for testing
+        # Preload is useful for local demos and tests.
         if preload_buffer:
             self._preload_dummy_data()
 
@@ -84,4 +88,11 @@ class ForecastEngine:
             return None
 
 
-forecast_engine = ForecastEngine(preload_buffer=True)
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+forecast_engine = ForecastEngine(preload_buffer=_env_flag("FORECAST_PRELOAD_BUFFER", False))

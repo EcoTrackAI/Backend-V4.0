@@ -5,7 +5,8 @@ from pathlib import Path
 from Apps.firebase_service import update_relay_state
 
 
-LOW_ENERGY_PATH = Path("models/low_energy_hours.pkl")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+LOW_ENERGY_PATH = PROJECT_ROOT / "models" / "low_energy_hours.pkl"
 AUTO_OFF_TIMEOUT = 300  # 5 minutes
 
 
