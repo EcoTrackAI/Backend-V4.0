@@ -72,9 +72,6 @@ ESP32 → Firebase → FastAPI → LSTM → Weather → LLM → Recommendation
 
 ---
 
-
----
-
 ## 🧠 Machine Learning
 
 - Built a **Multi-feature LSTM model** using:
@@ -105,11 +102,6 @@ ESP32 → Firebase → FastAPI → LSTM → Weather → LLM → Recommendation
 - **IoT:** ESP32 sensors  
 - **Deployment:** Render  
 - **Frontend:** Vercel (Next.js)  
-
----
-
-## 📁 Project Structure
-
 
 ---
 
