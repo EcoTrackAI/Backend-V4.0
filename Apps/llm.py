@@ -1,3 +1,23 @@
+import os
+import re
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-8b-8192")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+
+def extract_first_two_sentences(text: str) -> str:
+    if not text:
+        return "No recommendation generated."
+
+    sentences = re.split(r'(?<=[.!?]) +', text.strip())
+    return " ".join(sentences[:2]).strip()
+
+
 def ask_llm(context: dict) -> str:
     try:
         print("GROQ_API_KEY:", GROQ_API_KEY)
@@ -25,7 +45,9 @@ Hour: {context.get('hour')}
             },
             json={
                 "model": GROQ_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
                 "temperature": 0.3,
                 "max_tokens": 120
             },
