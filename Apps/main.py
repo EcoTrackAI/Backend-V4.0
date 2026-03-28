@@ -1,38 +1,32 @@
+from datetime import datetime
+
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
-from dotenv import load_dotenv
-import firebase_admin
-from firebase_admin import credentials, db
+from firebase_admin import db
 
 from Apps.automation import relay_controller
+from Apps.firebase_service import initialize_firebase, update_relay_state
 from Apps.forecasting import forecast_engine
-from Apps.weather import get_outdoor_weather
 from Apps.llm import ask_llm
-from Apps.firebase_service import update_relay_state
+from Apps.weather import get_outdoor_weather
 
 
 load_dotenv()
 
 
-# -----------------------------------
-# FIREBASE INITIALIZATION
-# -----------------------------------
-
-try:
-    if not firebase_admin._apps:
-        cred = credentials.Certificate("serviceAccountKey.json")
-        firebase_admin.initialize_app(cred, {
-            "databaseURL": "https://ecotrackai-7a140-default-rtdb.asia-southeast1.firebasedatabase.app/"
-        })
-except Exception as e:
-    print("Firebase initialization error:", e)
+ALLOWED_ROOMS = {"bedroom", "living_room"}
 
 
 app = FastAPI(
     title="EcoTrackAI Backend",
     version="4.0"
 )
+
+
+@app.on_event("startup")
+def startup() -> None:
+    initialize_firebase()
 
 
 # -----------------------------------
@@ -84,6 +78,8 @@ async def get_latest_sensor(room: str):
             "motion": int(bool(data.get("motion", 0)))
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, f"Firebase error: {str(e)}")
 
@@ -95,7 +91,7 @@ async def get_latest_sensor(room: str):
 @app.get("/live/{room}")
 async def live_sensor(room: str):
 
-    if room not in ["bedroom", "living_room"]:
+    if room not in ALLOWED_ROOMS:
         raise HTTPException(400, "Invalid room name")
 
     sensor = await get_latest_sensor(room)
@@ -117,7 +113,7 @@ async def relay_control(room: str, motion: int):
     if motion not in [0, 1]:
         raise HTTPException(400, "Motion must be 0 or 1")
 
-    if room not in ["bedroom", "living_room"]:
+    if room not in ALLOWED_ROOMS:
         raise HTTPException(400, "Invalid room name")
 
     try:
@@ -141,12 +137,12 @@ async def relay_control(room: str, motion: int):
 @app.get("/recommend")
 async def recommend(room: str):
 
-    if room not in ["bedroom", "living_room"]:
+    if room not in ALLOWED_ROOMS:
         raise HTTPException(400, "Invalid room name")
 
     try:
 
-        # Fetch latest sensor data from Firebase
+        # Fetch latest sensor data
         sensor = await get_latest_sensor(room)
 
         temp = sensor["temp"]
@@ -156,7 +152,7 @@ async def recommend(room: str):
 
         room_encoded = 0 if room == "bedroom" else 1
 
-        # Update LSTM buffer
+        # Update LSTM buffer (keep it)
         forecast_engine.update_buffer([
             temp,
             humidity,
@@ -167,26 +163,26 @@ async def recommend(room: str):
 
         predicted = forecast_engine.forecast_next()
 
+        # ✅ FIX: REMOVE BLOCKING CONDITION
         if predicted is None:
-            return {"message": "Collecting sequence data for prediction."}
-
-        predicted_temp = float(predicted[0])
-        predicted_humidity = float(predicted[1])
+            predicted_temp = temp
+            predicted_humidity = humidity
+        else:
+            try:
+                predicted_temp = float(predicted[0])
+                predicted_humidity = float(predicted[1])
+            except:
+                predicted_temp = temp
+                predicted_humidity = humidity
 
         # Get outdoor weather
         outdoor = get_outdoor_weather()
 
-        outdoor_temp = outdoor.get("outdoor_temp")
-        outdoor_humidity = outdoor.get("outdoor_humidity")
+        outdoor_temp = outdoor.get("outdoor_temp", temp)
+        outdoor_humidity = outdoor.get("outdoor_humidity", humidity)
 
-        temp_difference = None
-        humidity_difference = None
-
-        if outdoor_temp is not None:
-            temp_difference = predicted_temp - outdoor_temp
-
-        if outdoor_humidity is not None:
-            humidity_difference = predicted_humidity - outdoor_humidity
+        temp_difference = predicted_temp - outdoor_temp
+        humidity_difference = predicted_humidity - outdoor_humidity
 
         # Context for LLM
         context = {
@@ -208,6 +204,7 @@ async def recommend(room: str):
             "hour": datetime.now().hour
         }
 
+        # ✅ ALWAYS RUNS NOW
         recommendation = ask_llm(context)
 
         return {
@@ -227,7 +224,7 @@ async def recommend(room: str):
 @app.post("/force-relay")
 async def force_relay(room: str, state: bool):
 
-    if room not in ["bedroom", "living_room"]:
+    if room not in ALLOWED_ROOMS:
         raise HTTPException(400, "Invalid room name")
 
     try:
