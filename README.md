@@ -75,6 +75,12 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+Windows one-command run (activate + start server):
+
+```powershell
+.\run_server.bat
+```
+
 Open docs at `http://localhost:8000/docs`.
 
 ## Render Deployment

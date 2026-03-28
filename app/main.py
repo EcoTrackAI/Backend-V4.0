@@ -1,4 +1,5 @@
 from datetime import datetime
+import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -6,7 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from firebase_admin import db
 
 from app.services.automation import relay_controller
-from app.services.firebase_service import initialize_firebase, update_relay_state
+from app.services.firebase_service import (
+    initialize_firebase,
+    update_relay_state,
+)
 from app.services.forecasting import forecast_engine
 from app.services.llm import ask_llm
 from app.services.weather import get_outdoor_weather
@@ -110,8 +114,13 @@ async def recommend(room: str) -> dict:
         light = sensor["light"]
         motion = sensor["motion"]
         room_encoded = 0 if room == "bedroom" else 1
+        current_sample = [temp, humidity, light, room_encoded, motion]
 
-        forecast_engine.update_buffer([temp, humidity, light, room_encoded, motion])
+        if not forecast_engine.can_forecast():
+            forecast_engine.warm_start(current_sample)
+        else:
+            forecast_engine.update_buffer(current_sample)
+
         predicted = forecast_engine.forecast_next()
 
         if predicted is None:

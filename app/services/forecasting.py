@@ -51,6 +51,22 @@ class ForecastEngine:
 
         self.buffer.append(new_input)
 
+    def warm_start(self, seed_input: list):
+        """
+        Fill the rolling window with the latest known sample so
+        first-time forecasts can run after a fresh server restart.
+        """
+
+        if len(seed_input) != 5:
+            raise ValueError("Seed input must contain 5 features.")
+
+        if self.can_forecast():
+            return
+
+        missing = SEQ_LEN - len(self.buffer)
+        for _ in range(missing):
+            self.buffer.append(seed_input)
+
     def can_forecast(self) -> bool:
         return len(self.buffer) == SEQ_LEN
 
