@@ -142,7 +142,7 @@ async def recommend(room: str):
 
     try:
 
-        # Fetch latest sensor data from Firebase
+        # Fetch latest sensor data
         sensor = await get_latest_sensor(room)
 
         temp = sensor["temp"]
@@ -152,7 +152,7 @@ async def recommend(room: str):
 
         room_encoded = 0 if room == "bedroom" else 1
 
-        # Update LSTM buffer
+        # Update LSTM buffer (keep it)
         forecast_engine.update_buffer([
             temp,
             humidity,
@@ -163,26 +163,26 @@ async def recommend(room: str):
 
         predicted = forecast_engine.forecast_next()
 
+        # ✅ FIX: REMOVE BLOCKING CONDITION
         if predicted is None:
-            return {"message": "Collecting sequence data for prediction."}
-
-        predicted_temp = float(predicted[0])
-        predicted_humidity = float(predicted[1])
+            predicted_temp = temp
+            predicted_humidity = humidity
+        else:
+            try:
+                predicted_temp = float(predicted[0])
+                predicted_humidity = float(predicted[1])
+            except:
+                predicted_temp = temp
+                predicted_humidity = humidity
 
         # Get outdoor weather
         outdoor = get_outdoor_weather()
 
-        outdoor_temp = outdoor.get("outdoor_temp")
-        outdoor_humidity = outdoor.get("outdoor_humidity")
+        outdoor_temp = outdoor.get("outdoor_temp", temp)
+        outdoor_humidity = outdoor.get("outdoor_humidity", humidity)
 
-        temp_difference = None
-        humidity_difference = None
-
-        if outdoor_temp is not None:
-            temp_difference = predicted_temp - outdoor_temp
-
-        if outdoor_humidity is not None:
-            humidity_difference = predicted_humidity - outdoor_humidity
+        temp_difference = predicted_temp - outdoor_temp
+        humidity_difference = predicted_humidity - outdoor_humidity
 
         # Context for LLM
         context = {
@@ -204,6 +204,7 @@ async def recommend(room: str):
             "hour": datetime.now().hour
         }
 
+        # ✅ ALWAYS RUNS NOW
         recommendation = ask_llm(context)
 
         return {
