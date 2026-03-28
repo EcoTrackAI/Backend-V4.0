@@ -10,6 +10,42 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 GROQ_URL = os.getenv("GROQ_URL", "https://api.groq.com/openai/v1/chat/completions")
 
 
+def _fallback_recommendation(context: dict) -> str:
+    """Return a practical local recommendation when LLM is unavailable."""
+
+    motion = int(bool(context.get("motion", 0)))
+    light = float(context.get("light", 0) or 0)
+    predicted_temp = float(context.get("predicted_indoor_temp", 0) or 0)
+    predicted_humidity = float(context.get("predicted_humidity", 0) or 0)
+
+    if motion == 0:
+        return (
+            "Room seems empty, switch off AC, lights, and non-essential appliances; "
+            "keep only critical loads like fridge on."
+        )
+
+    actions = []
+
+    if predicted_temp > 27:
+        actions.append("set AC to 25-26C and use fan on low")
+    elif predicted_temp < 24:
+        actions.append("turn AC off and use fan only if needed")
+
+    if predicted_humidity > 70:
+        actions.append("use dry mode for 15-20 minutes")
+
+    if light > 120:
+        actions.append("dim or switch off extra lights")
+
+    if not actions:
+        return (
+            "Maintain current settings and avoid unnecessary appliance use to save "
+            "power while keeping comfort."
+        )
+
+    return f"Occupancy detected: {'; '.join(actions)}."
+
+
 def extract_first_two_sentences(text: str) -> str:
     """Limit response length"""
     if not text:
@@ -21,6 +57,8 @@ def extract_first_two_sentences(text: str) -> str:
 
 def ask_llm(context: dict) -> str:
     try:
+        if not GROQ_API_KEY:
+            return _fallback_recommendation(context)
 
         prompt = f"""
 You are an AI assistant for an Indian smart-home energy optimization system.
@@ -78,7 +116,7 @@ Generate the best energy-saving recommendation.
         )
 
         if response.status_code != 200:
-            return f"Groq API Error: {response.text}"
+            return _fallback_recommendation(context)
 
         data = response.json()
 
@@ -88,5 +126,5 @@ Generate the best energy-saving recommendation.
         return extract_first_two_sentences(full_response)
 
     except Exception as e:
-
-        return f"LLM Exception: {str(e)}"
+        print(f"LLM Exception: {e}")
+        return _fallback_recommendation(context)
