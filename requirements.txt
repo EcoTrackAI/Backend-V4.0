@@ -8,3 +8,4 @@ joblib
 torch
 scikit-learn
 firebase-admin
+psycopg2-binary
