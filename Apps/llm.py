@@ -20,21 +20,31 @@ def extract_first_two_sentences(text: str) -> str:
 
 def ask_llm(context: dict) -> str:
     try:
-        print("GROQ_API_KEY:", GROQ_API_KEY)
-
         if not GROQ_API_KEY:
             return "Missing GROQ API key"
 
-        prompt = f"""Give a short energy-saving recommendation.
+        print("LLM request triggered")
 
-Indoor Temp: {context.get('current_indoor_temp')}
-Predicted Temp: {context.get('predicted_indoor_temp')}
-Outdoor Temp: {context.get('outdoor_temp')}
-
-Humidity: {context.get('current_humidity')}
-Motion: {context.get('motion')}
-Light: {context.get('light')}
-Hour: {context.get('hour')}
+        prompt = f"""You are an intelligent energy optimization assistant for Indian households.
+        Your goal is to reduce electricity consumption while maintaining comfort.
+        Guidelines:
+        - Ideal indoor temperature range is 24°C to 28°C.
+        - If temperature is below 24°C → suggest reducing AC cooling or turning it off.
+        - If temperature is above 28°C → suggest efficient cooling (AC/fan balance).
+        - Avoid unnecessary AC/heater usage.
+        - Use fan or ventilation when possible instead of AC.
+        - If no motion is detected → suggest turning off lights and appliances.
+        - If sufficient natural light is present → avoid artificial lighting.
+        Give a SHORT, PRACTICAL recommendation (maximum 2 sentences).
+        Keepit simple, actionable, and realistic for a normal Indian household.
+        DATA:
+        Indoor Temp: {context.get('current_indoor_temp')}
+        Predicted Temp: {context.get('predicted_indoor_temp')}
+        Outdoor Temp: {context.get('outdoor_temp')}
+        Humidity: {context.get('current_humidity')}
+        Motion: {context.get('motion')}
+        Light: {context.get('light')}
+        Hour: {context.get('hour')}
 """
 
         response = requests.post(
@@ -54,16 +64,13 @@ Hour: {context.get('hour')}
             timeout=20
         )
 
-        print("STATUS:", response.status_code)
-        print("RAW RESPONSE:", response.text)
-
         if response.status_code != 200:
-            return f"Groq API Error: {response.text}"
+            return "Unable to generate recommendation right now. Try again shortly."
 
         data = response.json()
 
         if "choices" not in data:
-            return f"Invalid response: {data}"
+            return "Invalid response from LLM."
 
         return extract_first_two_sentences(
             data["choices"][0]["message"]["content"]
@@ -71,4 +78,4 @@ Hour: {context.get('hour')}
 
     except Exception as e:
         print("LLM EXCEPTION:", e)
-        return f"LLM Exception: {str(e)}"
+        return "LLM service temporarily unavailable."

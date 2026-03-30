@@ -3,10 +3,9 @@ from datetime import datetime
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from firebase_admin import db
 
 from Apps.automation import relay_controller
-from Apps.firebase_service import initialize_firebase, update_relay_state
+from Apps.db import get_latest_sensor_data, update_relay_state_db
 from Apps.forecasting import forecast_engine
 from Apps.llm import ask_llm
 from Apps.weather import get_outdoor_weather
@@ -14,20 +13,12 @@ from Apps.weather import get_outdoor_weather
 
 load_dotenv()
 
-
 ALLOWED_ROOMS = {"bedroom", "living_room"}
-
 
 app = FastAPI(
     title="EcoTrackAI Backend",
-    version="4.0"
+    version="5.0 (PostgreSQL Edition)"
 )
-
-
-@app.on_event("startup")
-def startup() -> None:
-    initialize_firebase()
-
 
 # -----------------------------------
 # CORS CONFIGURATION
@@ -45,7 +36,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # -----------------------------------
 # HEALTH CHECK
 # -----------------------------------
@@ -53,35 +43,23 @@ app.add_middleware(
 @app.get("/")
 def root():
     return {
-        "status": "EcoTrackAI backend running",
+        "status": "EcoTrackAI backend running (PostgreSQL)",
         "timestamp": datetime.now().isoformat()
     }
 
 
 # -----------------------------------
-# GET LATEST SENSOR DATA (FIREBASE)
+# GET LATEST SENSOR DATA (POSTGRESQL)
 # -----------------------------------
 
 async def get_latest_sensor(room: str):
 
-    try:
-        ref = db.reference(f"/sensors/{room}")
-        data = ref.get()
+    data = get_latest_sensor_data(room)
 
-        if not data:
-            raise HTTPException(404, "No sensor data found")
+    if not data:
+        raise HTTPException(404, "No sensor data found")
 
-        return {
-            "temp": data.get("temperature", 0),
-            "humidity": data.get("humidity", 0),
-            "light": data.get("light", 0),
-            "motion": int(bool(data.get("motion", 0)))
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"Firebase error: {str(e)}")
+    return data
 
 
 # -----------------------------------
@@ -104,7 +82,7 @@ async def live_sensor(room: str):
 
 
 # -----------------------------------
-# RELAY CONTROL
+# RELAY CONTROL (AUTO)
 # -----------------------------------
 
 @app.post("/relay")
@@ -142,7 +120,7 @@ async def recommend(room: str):
 
     try:
 
-        # Fetch latest sensor data
+        # Fetch latest sensor data from PostgreSQL
         sensor = await get_latest_sensor(room)
 
         temp = sensor["temp"]
@@ -152,7 +130,7 @@ async def recommend(room: str):
 
         room_encoded = 0 if room == "bedroom" else 1
 
-        # Update LSTM buffer (keep it)
+        # Update LSTM buffer
         forecast_engine.update_buffer([
             temp,
             humidity,
@@ -163,7 +141,7 @@ async def recommend(room: str):
 
         predicted = forecast_engine.forecast_next()
 
-        # ✅ FIX: REMOVE BLOCKING CONDITION
+        # Handle prediction safely
         if predicted is None:
             predicted_temp = temp
             predicted_humidity = humidity
@@ -204,7 +182,6 @@ async def recommend(room: str):
             "hour": datetime.now().hour
         }
 
-        # ✅ ALWAYS RUNS NOW
         recommendation = ask_llm(context)
 
         return {
@@ -228,13 +205,13 @@ async def force_relay(room: str, state: bool):
         raise HTTPException(400, "Invalid room name")
 
     try:
+        relay_key = f"{room}_light"
 
-        relay_controller.relay_states[f"{room}_light"] = state
+        # Update internal state
+        relay_controller.relay_states[relay_key] = state
 
-        update_relay_state(
-            f"{room}_light",
-            state
-        )
+        # Update PostgreSQL
+        update_relay_state_db(relay_key, state)
 
         return {
             "room": room,
