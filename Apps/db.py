@@ -39,9 +39,9 @@ def get_latest_sensor_data(room: str):
         return None
 
     return {
-        "temp": result[0],
-        "humidity": result[1],
-        "light": result[2],
+        "temp": float(result[0]),
+        "humidity": float(result[1]),
+        "light": float(result[2]),
         "motion": int(result[3])
     }
 
