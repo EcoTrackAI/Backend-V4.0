@@ -2,7 +2,7 @@ import time
 import joblib
 from datetime import datetime
 from pathlib import Path
-from Apps.firebase_service import update_relay_state
+from Apps.db import update_relay_state_db
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -52,7 +52,7 @@ class RelayController:
 
         # Low energy window override
         if self._is_low_energy_window():
-            update_relay_state(relay_key, self.relay_states[relay_key])
+            update_relay_state_db(relay_key, self.relay_states[relay_key])
             return self.relay_states[relay_key]
 
         # ------------------------------
@@ -81,7 +81,7 @@ class RelayController:
                 self.relay_states[relay_key] = False
 
         # update firebase relay state
-        update_relay_state(relay_key, self.relay_states[relay_key])
+        update_relay_state_db(relay_key, self.relay_states[relay_key])
 
         return self.relay_states[relay_key]
 

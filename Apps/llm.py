@@ -20,17 +20,24 @@ def extract_first_two_sentences(text: str) -> str:
 
 def ask_llm(context: dict) -> str:
     try:
-        print("GROQ_API_KEY:", GROQ_API_KEY)
-
         if not GROQ_API_KEY:
             return "Missing GROQ API key"
 
-        prompt = f"""Give a short energy-saving recommendation.
+        print("LLM request triggered")
 
+        prompt = f"""You are an intelligent energy optimization assistant.
+
+Give a SHORT and PRACTICAL recommendation (max 2 sentences).
+
+Consider:
+- Reduce energy usage
+- Maintain comfort
+- Use motion and light intelligently
+
+DATA:
 Indoor Temp: {context.get('current_indoor_temp')}
 Predicted Temp: {context.get('predicted_indoor_temp')}
 Outdoor Temp: {context.get('outdoor_temp')}
-
 Humidity: {context.get('current_humidity')}
 Motion: {context.get('motion')}
 Light: {context.get('light')}
@@ -54,16 +61,13 @@ Hour: {context.get('hour')}
             timeout=20
         )
 
-        print("STATUS:", response.status_code)
-        print("RAW RESPONSE:", response.text)
-
         if response.status_code != 200:
-            return f"Groq API Error: {response.text}"
+            return "Unable to generate recommendation right now. Try again shortly."
 
         data = response.json()
 
         if "choices" not in data:
-            return f"Invalid response: {data}"
+            return "Invalid response from LLM."
 
         return extract_first_two_sentences(
             data["choices"][0]["message"]["content"]
@@ -71,4 +75,4 @@ Hour: {context.get('hour')}
 
     except Exception as e:
         print("LLM EXCEPTION:", e)
-        return f"LLM Exception: {str(e)}"
+        return "LLM service temporarily unavailable."
