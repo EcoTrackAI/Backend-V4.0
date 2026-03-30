@@ -1,24 +1,30 @@
 import psycopg2
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL is not set")
 
 
 def get_connection():
     return psycopg2.connect(DATABASE_URL)
 
 
-# ---------------------------
-# FETCH LATEST SENSOR DATA
-# ---------------------------
+# -----------------------------------
+# GET LATEST SENSOR DATA
+# -----------------------------------
 def get_latest_sensor_data(room: str):
     conn = get_connection()
     cursor = conn.cursor()
 
     query = """
     SELECT temperature, humidity, light, motion
-    FROM sensors
-    WHERE room = %s
+    FROM room_sensors
+    WHERE room_id = %s
     ORDER BY timestamp DESC
     LIMIT 1;
     """
@@ -40,21 +46,24 @@ def get_latest_sensor_data(room: str):
     }
 
 
-# ---------------------------
+# -----------------------------------
 # UPDATE RELAY STATE
-# ---------------------------
+# -----------------------------------
 def update_relay_state_db(relay_key: str, state: bool):
     conn = get_connection()
     cursor = conn.cursor()
 
+    # relay_key = "bedroom_light"
+    room_id, relay_type = relay_key.split("_")
+
     query = """
-    INSERT INTO relays (relay_key, state, timestamp)
-    VALUES (%s, %s, NOW())
-    ON CONFLICT (relay_key)
-    DO UPDATE SET state = EXCLUDED.state, timestamp = NOW();
+    INSERT INTO relay_states (room_id, relay_type, state, updated_at)
+    VALUES (%s, %s, %s, NOW())
+    ON CONFLICT (room_id, relay_type)
+    DO UPDATE SET state = EXCLUDED.state, updated_at = NOW();
     """
 
-    cursor.execute(query, (relay_key, state))
+    cursor.execute(query, (room_id, relay_type, state))
 
     conn.commit()
     cursor.close()
